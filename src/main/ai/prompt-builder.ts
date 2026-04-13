@@ -2,13 +2,41 @@ import type { AssembledData, SceneHint, AuthChainItem, FilteredRequest } from '@
 
 interface PromptMessages { system: string; user: string }
 
+const REVERSE_API_REQUIREMENTS = `1. 完整 API 端点清单：列出所有 API 的方法、路径、请求参数、响应 JSON 结构
+2. 鉴权流程：Token/Cookie 获取、刷新、传递机制的完整链路
+3. 请求依赖链：哪些请求的响应是后续请求的必要输入
+4. 数据模型推断：从 API 响应结构推断后端数据模型
+5. 复现代码：用 Python requests 库写出可直接运行的完整 API 调用流程`
+
+const SECURITY_AUDIT_REQUIREMENTS = `1. 认证安全：分析认证方式的安全性，是否存在弱口令、明文传输、Token 泄露风险
+2. 敏感数据暴露：检查响应中是否包含不必要的敏感信息（密码、密钥、PII）
+3. CSRF/XSS 风险：分析请求是否缺少 CSRF Token，响应头是否缺少安全头（CSP, X-Frame-Options 等）
+4. 权限控制：分析是否存在越权访问的可能（水平/垂直越权）
+5. 安全建议：针对发现的问题给出具体修复建议`
+
+const PERFORMANCE_REQUIREMENTS = `1. 请求时序分析：分析请求的串行/并行关系，识别阻塞链路
+2. 冗余请求：识别重复或不必要的请求
+3. 资源优化：分析资源加载顺序，识别可优化的静态资源
+4. 缓存策略：分析 Cache-Control、ETag 等缓存头的使用情况
+5. 性能建议：给出具体的性能优化建议和预期收益`
+
+const DEFAULT_REQUIREMENTS = `1. 场景识别：判断用户执行了什么操作（注册、登录、AI对话、支付等）
+2. 交互流程概述：按时间顺序描述完整交互链路
+3. API端点清单：列出所有关键API，标注方法、路径、用途
+4. 鉴权机制分析：认证方式、凭据获取流程、凭据传递方式
+5. 流式通信分析（如检测到SSE/WebSocket）：协议类型、端点、请求/响应格式
+6. 存储使用分析：Cookie/localStorage/sessionStorage 的关键变化
+7. 关键依赖关系：请求之间的依赖和时序关系
+8. 复现建议：用代码伪逻辑描述如何复现整个流程`
+
 /**
  * PromptBuilder — Builds the analysis prompt from assembled data.
  */
 export class PromptBuilder {
-  build(data: AssembledData, platformName: string): PromptMessages {
+  build(data: AssembledData, platformName: string, purpose?: string): PromptMessages {
     const system = `你是一位网站协议分析专家。你的任务是分析用户在网站上的操作过程中产生的HTTP请求、JS调用和存储变化，识别其业务场景，并生成结构化的协议分析报告。Be precise and technical. Output in Chinese (Simplified).`
 
+    const analysisRequirements = this.buildAnalysisRequirements(purpose)
     const requestsSection = this.formatRequests(data.requests)
     const hooksSection = this.formatHooks(data.requests)
     const storageSection = this.formatStorageDiff(data.storageDiff)
@@ -37,16 +65,30 @@ ${hooksSection}
 ${storageSection}
 
 ## 分析要求
-1. 场景识别：判断用户执行了什么操作（注册、登录、AI对话、支付等）
-2. 交互流程概述：按时间顺序描述完整交互链路
-3. API端点清单：列出所有关键API，标注方法、路径、用途
-4. 鉴权机制分析：认证方式、凭据获取流程、凭据传递方式
-5. 流式通信分析（如检测到SSE/WebSocket）：协议类型、端点、请求/响应格式
-6. 存储使用分析：Cookie/localStorage/sessionStorage 的关键变化
-7. 关键依赖关系：请求之间的依赖和时序关系
-8. 复现建议：用代码伪逻辑描述如何复现整个流程`
+${analysisRequirements}`
 
     return { system, user }
+  }
+
+  private buildAnalysisRequirements(purpose?: string): string {
+    if (!purpose || purpose === 'auto') {
+      return DEFAULT_REQUIREMENTS
+    }
+
+    const predefinedMap: Record<string, string> = {
+      'reverse-api': REVERSE_API_REQUIREMENTS,
+      'security-audit': SECURITY_AUDIT_REQUIREMENTS,
+      'performance': PERFORMANCE_REQUIREMENTS,
+    }
+
+    if (predefinedMap[purpose]) {
+      return predefinedMap[purpose]
+    }
+
+    return `用户指定的分析重点：${purpose}
+
+在完成上述重点分析的同时，也请覆盖以下基础分析：
+${DEFAULT_REQUIREMENTS}`
   }
 
   private formatSceneHints(hints: SceneHint[]): string {
