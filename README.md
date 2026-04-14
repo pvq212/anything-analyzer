@@ -1,11 +1,61 @@
 # Anything Analyzer
 
+> **一句话：** 打开浏览器操作一遍，AI 就帮你把协议逆向、加密分析、安全审计的活儿干了 —— 省掉你手动抓包、整理请求、逐条分析的那几个小时。
+
 Universal web protocol analyzer — 一款内嵌浏览器的桌面应用，通过 Chrome DevTools Protocol 实时捕获网络请求、JS Hook、存储变化，并借助 AI 进行智能协议分析。
 
 ![Electron](https://img.shields.io/badge/Electron-35-blue)
 ![React](https://img.shields.io/badge/React-19-61dafb)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)
 ![License](https://img.shields.io/badge/License-MIT-green)
+
+---
+
+## 这个项目解决什么问题？
+
+传统的协议分析流程是这样的：
+
+1. 开 Chrome DevTools 或 Fiddler/Charles 抓包
+2. 手动翻几十上百条请求，找出关键接口
+3. 一条条复制 headers、body，整理成文档
+4. 自己分析鉴权流程、加密逻辑、API 模式
+5. 手写 Python 复现代码
+
+**Anything Analyzer 把 2～5 步全部交给 AI。** 你只需要在内嵌浏览器里正常操作网站，剩下的交给它。
+
+---
+
+## 使用场景
+
+| 场景 | 具体例子 | 你能得到什么 |
+|------|---------|-------------|
+| **逆向 API 协议** | 想对接某个网站的非公开 API | 完整的 API 端点文档 + 鉴权流程 + Python 复现代码 |
+| **JS 加密逆向** | 请求参数有加密签名，不知道怎么生成的 | 自动识别 CryptoJS/SM4/RSA 等加密库，还原加密流程，给出 Python 实现 |
+| **安全审计** | 检查自家网站的接口安全性 | Token 泄露风险、CSRF/XSS 漏洞、敏感数据暴露等问题清单 |
+| **性能分析** | 页面加载慢，想知道瓶颈在哪 | 请求瀑布图分析、冗余请求识别、缓存策略建议 |
+| **学习 Web 协议** | 想理解某个网站的 OAuth/SSO 登录流程 | AI 帮你梳理完整的认证链路和 Token 流转过程 |
+| **调试第三方集成** | 对接支付/社交登录等 SDK，想看实际请求 | 完整的请求/响应记录 + AI 解读每一步在做什么 |
+
+---
+
+## 适用人群
+
+**适合你，如果你是：**
+
+- 后端/全栈开发者 — 需要快速理解和对接第三方 API
+- 安全研究员 — 做 Web 安全审计、渗透测试前的信息收集
+- 爬虫开发者 — 逆向网站的 API 协议和加密参数
+- 前端开发者 — 调试复杂的请求链路和加密逻辑
+- 学生/学习者 — 想深入理解 HTTP 协议、OAuth、加密等 Web 技术
+
+**不适合你，如果你：**
+
+- 只需要简单地看一两个请求 — Chrome DevTools 就够了
+- 需要修改/拦截请求（中间人代理） — 这不是 mitmproxy，本工具只读不改
+- 需要自动化测试 — 这是分析工具，不是测试框架
+- 分析非 HTTP 协议的流量 — 目前仅支持 HTTP/HTTPS + WebSocket + SSE
+
+---
 
 ## Features
 
