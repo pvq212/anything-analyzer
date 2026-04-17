@@ -37,7 +37,7 @@ interface AnthropicToolUseBlock {
 
 type AnthropicContentBlock = AnthropicTextBlock | AnthropicToolUseBlock;
 
-const DEFAULT_TIMEOUT = 120000; // 2 minutes for initial connection + first response
+const DEFAULT_TIMEOUT = 600000; // 10 minutes — LLM relay servers can be slow; user can cancel manually
 
 /**
  * Sanitize string content in LLM request body to remove control characters
@@ -69,15 +69,14 @@ export class LLMRouter {
   async complete(
     messages: ChatMessage[],
     onChunk?: (chunk: string) => void,
-    signal?: AbortSignal,
   ): Promise<LLMResponse> {
     if (this.config.name === "anthropic") {
-      return this.completeAnthropic(messages, onChunk, signal);
+      return this.completeAnthropic(messages, onChunk);
     }
     if (this.config.apiType === "responses") {
-      return this.completeResponses(messages, onChunk, signal);
+      return this.completeResponses(messages, onChunk);
     }
-    return this.completeOpenAI(messages, onChunk, signal);
+    return this.completeOpenAI(messages, onChunk);
   }
 
   /**
@@ -90,12 +89,11 @@ export class LLMRouter {
     callTool: (name: string, args: Record<string, unknown>) => Promise<string>,
     onChunk?: (chunk: string) => void,
     maxRounds = 10,
-    signal?: AbortSignal,
   ): Promise<LLMResponse> {
     if (this.config.name === "anthropic") {
-      return this.agenticLoopAnthropic(messages, tools, callTool, onChunk, maxRounds, signal);
+      return this.agenticLoopAnthropic(messages, tools, callTool, onChunk, maxRounds);
     }
-    return this.agenticLoopOpenAI(messages, tools, callTool, onChunk, maxRounds, signal);
+    return this.agenticLoopOpenAI(messages, tools, callTool, onChunk, maxRounds);
   }
 
   // ---- Agentic Loop: OpenAI / Custom ----
@@ -106,7 +104,6 @@ export class LLMRouter {
     callTool: (name: string, args: Record<string, unknown>) => Promise<string>,
     onChunk?: (chunk: string) => void,
     maxRounds = 10,
-    signal?: AbortSignal,
   ): Promise<LLMResponse> {
     const openaiTools = tools.map((t) => ({
       type: "function" as const,
@@ -122,7 +119,6 @@ export class LLMRouter {
     let totalCompletionTokens = 0;
 
     for (let round = 0; round < maxRounds; round++) {
-      signal?.throwIfAborted();
       const url = `${this.config.baseUrl.replace(/\/$/, "")}/chat/completions`;
       const body = {
         model: this.config.model,
@@ -145,7 +141,7 @@ export class LLMRouter {
           Authorization: `Bearer ${this.config.apiKey}`,
         },
         body: JSON.stringify(sanitizeForJson(body)),
-      }, 1, signal);
+      });
 
       const data = (await response.json()) as {
         choices: Array<{
@@ -210,7 +206,7 @@ export class LLMRouter {
     }
 
     // Max rounds exceeded — do final call without tools to force text response
-    return this.complete(history, onChunk, signal);
+    return this.complete(history, onChunk);
   }
 
   // ---- Agentic Loop: Anthropic ----
@@ -221,7 +217,6 @@ export class LLMRouter {
     callTool: (name: string, args: Record<string, unknown>) => Promise<string>,
     onChunk?: (chunk: string) => void,
     maxRounds = 10,
-    signal?: AbortSignal,
   ): Promise<LLMResponse> {
     const anthropicTools = tools.map((t) => ({
       name: t.name,
@@ -239,7 +234,6 @@ export class LLMRouter {
     let totalCompletionTokens = 0;
 
     for (let round = 0; round < maxRounds; round++) {
-      signal?.throwIfAborted();
       const url = `${this.config.baseUrl.replace(/\/$/, "")}/messages`;
       const body: Record<string, unknown> = {
         model: this.config.model,
@@ -258,7 +252,7 @@ export class LLMRouter {
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify(sanitizeForJson(body)),
-      }, 1, signal);
+      });
 
       const data = (await response.json()) as {
         content: AnthropicContentBlock[];
@@ -316,13 +310,12 @@ export class LLMRouter {
     }
 
     // Max rounds exceeded — final call without tools
-    return this.complete(messages, onChunk, signal);
+    return this.complete(messages, onChunk);
   }
 
   private async completeOpenAI(
     messages: ChatMessage[],
     onChunk?: (chunk: string) => void,
-    signal?: AbortSignal,
   ): Promise<LLMResponse> {
     const url = `${this.config.baseUrl.replace(/\/$/, "")}/chat/completions`;
     const stream = !!onChunk;
@@ -340,9 +333,9 @@ export class LLMRouter {
         Authorization: `Bearer ${this.config.apiKey}`,
       },
       body: JSON.stringify(sanitizeForJson(body)),
-    }, 1, signal);
+    });
 
-    if (stream) return this.parseOpenAIStream(response, onChunk!, signal);
+    if (stream) return this.parseOpenAIStream(response, onChunk!);
 
     const data = (await response.json()) as {
       choices: Array<{ message: { content: string } }>;
@@ -358,7 +351,6 @@ export class LLMRouter {
   private async completeResponses(
     messages: ChatMessage[],
     onChunk?: (chunk: string) => void,
-    signal?: AbortSignal,
   ): Promise<LLMResponse> {
     const url = `${this.config.baseUrl.replace(/\/$/, "")}/responses`;
     const stream = !!onChunk;
@@ -381,9 +373,9 @@ export class LLMRouter {
         Authorization: `Bearer ${this.config.apiKey}`,
       },
       body: JSON.stringify(sanitizeForJson(body)),
-    }, 1, signal);
+    });
 
-    if (stream) return this.parseResponsesStream(response, onChunk!, signal);
+    if (stream) return this.parseResponsesStream(response, onChunk!);
 
     const data = (await response.json()) as {
       output_text?: string;
@@ -399,7 +391,6 @@ export class LLMRouter {
   private async completeAnthropic(
     messages: ChatMessage[],
     onChunk?: (chunk: string) => void,
-    signal?: AbortSignal,
   ): Promise<LLMResponse> {
     const url = `${this.config.baseUrl.replace(/\/$/, "")}/messages`;
     const stream = !!onChunk;
@@ -423,9 +414,9 @@ export class LLMRouter {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify(sanitizeForJson(body)),
-    }, 1, signal);
+    });
 
-    if (stream) return this.parseAnthropicStream(response, onChunk!, signal);
+    if (stream) return this.parseAnthropicStream(response, onChunk!);
 
     const data = (await response.json()) as {
       content: Array<{ type: string; text: string }>;
@@ -445,7 +436,6 @@ export class LLMRouter {
   private async parseOpenAIStream(
     response: Response,
     onChunk: (chunk: string) => void,
-    signal?: AbortSignal,
   ): Promise<LLMResponse> {
     let fullContent = "",
       promptTokens = 0,
@@ -455,37 +445,32 @@ export class LLMRouter {
     const decoder = new TextDecoder();
     let buffer = "";
 
-    try {
-      while (true) {
-        if (signal?.aborted) break;
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith("data: ")) continue;
-          const data = trimmed.slice(6);
-          if (data === "[DONE]") continue;
-          try {
-            const parsed = JSON.parse(data) as any;
-            const chunk = parsed.choices?.[0]?.delta?.content || "";
-            if (chunk) {
-              fullContent += chunk;
-              onChunk(chunk);
-            }
-            if (parsed.usage) {
-              promptTokens = parsed.usage.prompt_tokens;
-              completionTokens = parsed.usage.completion_tokens;
-            }
-          } catch {
-            /* skip */
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith("data: ")) continue;
+        const data = trimmed.slice(6);
+        if (data === "[DONE]") continue;
+        try {
+          const parsed = JSON.parse(data) as any;
+          const chunk = parsed.choices?.[0]?.delta?.content || "";
+          if (chunk) {
+            fullContent += chunk;
+            onChunk(chunk);
           }
+          if (parsed.usage) {
+            promptTokens = parsed.usage.prompt_tokens;
+            completionTokens = parsed.usage.completion_tokens;
+          }
+        } catch {
+          /* skip */
         }
       }
-    } finally {
-      reader.releaseLock();
     }
     return { content: fullContent, promptTokens, completionTokens };
   }
@@ -493,7 +478,6 @@ export class LLMRouter {
   private async parseResponsesStream(
     response: Response,
     onChunk: (chunk: string) => void,
-    signal?: AbortSignal,
   ): Promise<LLMResponse> {
     let fullContent = "",
       promptTokens = 0,
@@ -504,47 +488,42 @@ export class LLMRouter {
     let buffer = "";
     let currentEvent = "";
 
-    try {
-      while (true) {
-        if (signal?.aborted) break;
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) {
-            currentEvent = "";
-            continue;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          currentEvent = "";
+          continue;
+        }
+        if (trimmed.startsWith("event: ")) {
+          currentEvent = trimmed.slice(7);
+          continue;
+        }
+        if (!trimmed.startsWith("data: ")) continue;
+        try {
+          const parsed = JSON.parse(trimmed.slice(6)) as any;
+          if (currentEvent === "response.output_text.delta" && parsed.delta) {
+            fullContent += parsed.delta;
+            onChunk(parsed.delta);
           }
-          if (trimmed.startsWith("event: ")) {
-            currentEvent = trimmed.slice(7);
-            continue;
+          if (currentEvent === "response.completed" && parsed.response?.usage) {
+            promptTokens = parsed.response.usage.input_tokens || 0;
+            completionTokens = parsed.response.usage.output_tokens || 0;
           }
-          if (!trimmed.startsWith("data: ")) continue;
-          try {
-            const parsed = JSON.parse(trimmed.slice(6)) as any;
-            if (currentEvent === "response.output_text.delta" && parsed.delta) {
-              fullContent += parsed.delta;
-              onChunk(parsed.delta);
-            }
-            if (currentEvent === "response.completed" && parsed.response?.usage) {
-              promptTokens = parsed.response.usage.input_tokens || 0;
-              completionTokens = parsed.response.usage.output_tokens || 0;
-            }
-            if (currentEvent === "error" || currentEvent === "response.failed") {
-              const errorMsg =
-                parsed.message || parsed.error?.message || "Unknown stream error";
-              throw new Error(`Responses API stream error: ${errorMsg}`);
-            }
-          } catch {
-            /* skip malformed JSON */
+          if (currentEvent === "error" || currentEvent === "response.failed") {
+            const errorMsg =
+              parsed.message || parsed.error?.message || "Unknown stream error";
+            throw new Error(`Responses API stream error: ${errorMsg}`);
           }
+        } catch {
+          /* skip malformed JSON */
         }
       }
-    } finally {
-      reader.releaseLock();
     }
     return { content: fullContent, promptTokens, completionTokens };
   }
@@ -552,7 +531,6 @@ export class LLMRouter {
   private async parseAnthropicStream(
     response: Response,
     onChunk: (chunk: string) => void,
-    signal?: AbortSignal,
   ): Promise<LLMResponse> {
     let fullContent = "",
       promptTokens = 0,
@@ -562,34 +540,29 @@ export class LLMRouter {
     const decoder = new TextDecoder();
     let buffer = "";
 
-    try {
-      while (true) {
-        if (signal?.aborted) break;
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith("data: ")) continue;
-          try {
-            const parsed = JSON.parse(trimmed.slice(6)) as any;
-            if (parsed.type === "content_block_delta" && parsed.delta?.text) {
-              fullContent += parsed.delta.text;
-              onChunk(parsed.delta.text);
-            }
-            if (parsed.type === "message_start" && parsed.message?.usage)
-              promptTokens = parsed.message.usage.input_tokens;
-            if (parsed.type === "message_delta" && parsed.usage)
-              completionTokens = parsed.usage.output_tokens || 0;
-          } catch {
-            /* skip */
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith("data: ")) continue;
+        try {
+          const parsed = JSON.parse(trimmed.slice(6)) as any;
+          if (parsed.type === "content_block_delta" && parsed.delta?.text) {
+            fullContent += parsed.delta.text;
+            onChunk(parsed.delta.text);
           }
+          if (parsed.type === "message_start" && parsed.message?.usage)
+            promptTokens = parsed.message.usage.input_tokens;
+          if (parsed.type === "message_delta" && parsed.usage)
+            completionTokens = parsed.usage.output_tokens || 0;
+        } catch {
+          /* skip */
         }
       }
-    } finally {
-      reader.releaseLock();
     }
     return { content: fullContent, promptTokens, completionTokens };
   }
@@ -598,15 +571,9 @@ export class LLMRouter {
     url: string,
     options: RequestInit,
     retries = 1,
-    signal?: AbortSignal,
   ): Promise<Response> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT);
-    // Link external abort signal to internal controller
-    if (signal) {
-      if (signal.aborted) { clearTimeout(timeout); controller.abort(); }
-      else signal.addEventListener('abort', () => { clearTimeout(timeout); controller.abort(); }, { once: true });
-    }
     try {
       const response = await fetch(url, {
         ...options,
@@ -620,7 +587,7 @@ export class LLMRouter {
           10,
         );
         await new Promise((r) => setTimeout(r, retryAfter * 1000));
-        return this.fetchWithRetry(url, options, retries - 1, signal);
+        return this.fetchWithRetry(url, options, retries - 1);
       }
       if (!response.ok) {
         const errorBody = await response.text().catch(() => "");
@@ -629,8 +596,6 @@ export class LLMRouter {
       return response;
     } catch (err) {
       clearTimeout(timeout);
-      // If user cancelled, rethrow directly without diagnosis
-      if (signal?.aborted) throw new Error("Analysis cancelled");
       throw new Error(this.diagnoseNetworkError(err as Error, url));
     }
   }
@@ -644,7 +609,7 @@ export class LLMRouter {
       try { return new URL(url).host; } catch { return url; }
     })();
 
-    // AbortController timeout (internal)
+    // AbortController timeout
     if (err.name === "AbortError" || msg.includes("aborted")) {
       return `连接超时：${host} 在 ${DEFAULT_TIMEOUT / 1000} 秒内未响应。请检查 API 地址是否正确，以及网络是否可达。`;
     }

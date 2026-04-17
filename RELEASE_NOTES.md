@@ -1,25 +1,22 @@
-# Anything Analyzer v3.2.2
+# Anything Analyzer v3.3.3
 
 ## 新功能
 
-- **MCP Server 鉴权** — 内置 MCP Server 新增 Bearer Token 鉴权机制，默认开启
-  - 首次启用自动生成安全 Token
-  - 设置面板可开关鉴权、查看/编辑/复制/重新生成 Token
-  - 外部工具需在请求头中携带 `Authorization: Bearer <token>`
-  - 可选关闭鉴权（不推荐）
+- **追问对话持久化** — AI 分析报告的追问问答现在会保存到数据库，重启应用后自动恢复
+  - 每个分析报告拥有独立的对话历史
+  - 多次分析同一 Session 互不影响
+  - 切换 Session 或重启后自动加载最新报告的完整对话
 
-## Bug Fixes
+## 改进
 
-- **修复抓包控件配色** — 修复 Start/Pause/Stop 按钮在不同状态下颜色不变的问题
-  - Stopped 状态：Start 绿色可点击，Pause/Stop 灰色禁用
-  - Running 状态：Start 绿色指示，Pause 黄色、Stop 红色可点击
-  - Paused 状态：Pause 黄色指示，Resume 绿色、Stop 红色可点击
+- **LLM 超时时间延长** — 连接超时从 2 分钟延长至 10 分钟，避免慢速中转服务误报超时
+  - 用户可随时通过取消按钮手动中止
 
 ## 下载
 
 | 平台 | 文件 |
 |------|------|
-| Windows | `Anything-Analyzer-Setup-3.2.2.exe` |
-| macOS (Apple Silicon) | `Anything-Analyzer-3.2.2-arm64.dmg` |
-| macOS (Intel) | `Anything-Analyzer-3.2.2-x64.dmg` |
-| Linux | `Anything-Analyzer-3.2.2.AppImage` |
+| Windows | `Anything-Analyzer-Setup-3.3.3.exe` |
+| macOS (Apple Silicon) | `Anything-Analyzer-3.3.3-arm64.dmg` |
+| macOS (Intel) | `Anything-Analyzer-3.3.3-x64.dmg` |
+| Linux | `Anything-Analyzer-3.3.3.AppImage` |

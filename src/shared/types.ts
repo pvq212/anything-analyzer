@@ -473,7 +473,9 @@ export interface ElectronAPI {
 
   startAnalysis: (sessionId: string, purpose?: string, selectedSeqs?: number[]) => Promise<AnalysisReport>;
   cancelAnalysis: (sessionId: string) => Promise<void>;
-  sendFollowUp: (sessionId: string, history: ChatMessage[], userMessage: string) => Promise<string>;
+  sendFollowUp: (sessionId: string, reportId: string, history: ChatMessage[], userMessage: string) => Promise<string>;
+  getChatMessages: (reportId: string) => Promise<ChatMessage[]>;
+  saveChatMessages: (reportId: string, messages: ChatMessage[]) => Promise<void>;
   syncBrowserBounds: (bounds: {
     x: number;
     y: number;

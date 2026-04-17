@@ -109,6 +109,24 @@ export function runMigrations(db: Database.Database): void {
   migrateAddStreamingAndWebSocketFlags(db)
   migrateAddFilterTokenColumns(db)
   migrateAddSourceColumn(db)
+  migrateAddChatMessagesTable(db)
+}
+
+/**
+ * Migration 008: Add chat_messages table for persisting follow-up Q&A per report
+ * Safe to call multiple times (uses IF NOT EXISTS).
+ */
+export function migrateAddChatMessagesTable(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      report_id  TEXT NOT NULL REFERENCES analysis_reports(id) ON DELETE CASCADE,
+      role       TEXT NOT NULL,
+      content    TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_report ON chat_messages(report_id, id);
+  `)
 }
 
 /**

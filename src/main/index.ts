@@ -8,6 +8,7 @@ import {
   StorageSnapshotsRepo,
   AnalysisReportsRepo,
   FingerprintProfilesRepo,
+  ChatMessagesRepo,
 } from "./db/repositories";
 import { CaptureEngine } from "./capture/capture-engine";
 import { SessionManager } from "./session/session-manager";
@@ -44,6 +45,7 @@ app.whenReady().then(async () => {
   const jsHooksRepo = new JsHooksRepo(db);
   const storageSnapshotsRepo = new StorageSnapshotsRepo(db);
   const reportsRepo = new AnalysisReportsRepo(db);
+  const chatMessagesRepo = new ChatMessagesRepo(db);
   const fingerprintRepo = new FingerprintProfilesRepo(db);
   const profileStore = new ProfileStore(fingerprintRepo);
 
@@ -106,6 +108,7 @@ app.whenReady().then(async () => {
     jsHooksRepo,
     storageSnapshotsRepo,
     reportsRepo,
+    chatMessagesRepo,
     profileStore,
   });
 

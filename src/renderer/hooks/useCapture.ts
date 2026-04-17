@@ -81,6 +81,16 @@ export function useCapture(sessionId: string | null): UseCaptureReturn {
         window.electronAPI.getReports(sid),
       ]);
 
+      // Restore chat history for the latest report
+      let chatHistory: ChatMessage[] = [];
+      if (reports.length > 0) {
+        const latestReport = reports.sort((a, b) => b.created_at - a.created_at)[0];
+        const savedMessages = await window.electronAPI.getChatMessages(latestReport.id);
+        if (savedMessages.length > 0) {
+          chatHistory = savedMessages as ChatMessage[];
+        }
+      }
+
       // Only update if session hasn't changed while loading
       if (sessionIdRef.current === sid) {
         setState((prev) => ({
@@ -89,6 +99,7 @@ export function useCapture(sessionId: string | null): UseCaptureReturn {
           hooks: hooks.sort((a, b) => b.timestamp - a.timestamp),
           snapshots,
           reports: reports.sort((a, b) => b.created_at - a.created_at),
+          chatHistory,
         }));
       }
     } catch (err) {
@@ -110,8 +121,10 @@ export function useCapture(sessionId: string | null): UseCaptureReturn {
 
       // Only update if session hasn't changed
       if (sessionIdRef.current === sid) {
+        // Build context summary from captured data for follow-up chat
+        // (read current state synchronously via a mini-setState that returns prev unchanged)
+        let systemContent = '';
         setState((prev) => {
-          // Build context summary from captured data for follow-up chat
           const reqSummary = prev.requests.slice(0, 50).map(r => {
             let path = r.url
             try { path = new URL(r.url).pathname } catch { /* keep full url */ }
@@ -128,22 +141,30 @@ export function useCapture(sessionId: string | null): UseCaptureReturn {
             ? `\n\n<captured_data_summary>\nCaptured ${prev.requests.length} requests:\n${reqSummary}${prev.requests.length > 50 ? `\n... and ${prev.requests.length - 50} more` : ''}${hookSummary}\n</captured_data_summary>`
             : ''
 
-          const systemContent = `你是一位网站协议分析专家。基于之前的分析报告和捕获数据，回答用户的追问。保持技术精确，用中文回复。
+          systemContent = `你是一位网站协议分析专家。基于之前的分析报告和捕获数据，回答用户的追问。保持技术精确，用中文回复。
 
 你可以使用 get_request_detail 工具，通过传入请求序号(seq)来查看任意请求的完整详情（请求头、请求体、响应头、响应体）。当用户追问某个具体请求或需要更多细节时，请主动调用此工具获取数据。${contextBlock}`
+
+          const chatHistory: ChatMessage[] = [
+            { role: 'system' as const, content: systemContent },
+            { role: 'assistant' as const, content: report.report_content },
+          ];
 
           return {
             ...prev,
             isAnalyzing: false,
             streamingContent: "",
             reports: [report, ...prev.reports],
-            chatHistory: [
-              { role: 'system' as const, content: systemContent },
-              { role: 'assistant' as const, content: report.report_content },
-            ],
+            chatHistory,
             chatError: null,
           }
         });
+
+        // Persist initial chat messages (system prompt + report) to database
+        window.electronAPI.saveChatMessages(report.id, [
+          { role: 'system', content: systemContent },
+          { role: 'assistant', content: report.report_content },
+        ]).catch(err => console.error("Failed to save initial chat messages:", err));
       }
     } catch (err) {
       console.error("Analysis failed:", err);
@@ -177,16 +198,23 @@ export function useCapture(sessionId: string | null): UseCaptureReturn {
   }, [state.chatHistory]);
 
   const sendFollowUp = useCallback(async (sid: string, message: string) => {
-    setState((prev) => ({
-      ...prev,
-      isChatting: true,
-      chatError: null,
-      streamingContent: "",
-      chatHistory: [...prev.chatHistory, { role: 'user' as const, content: message }],
-    }));
+    // Get the latest report ID for persisting chat messages
+    let currentReportId = '';
+    setState((prev) => {
+      if (prev.reports.length > 0) {
+        currentReportId = prev.reports[0].id;
+      }
+      return {
+        ...prev,
+        isChatting: true,
+        chatError: null,
+        streamingContent: "",
+        chatHistory: [...prev.chatHistory, { role: 'user' as const, content: message }],
+      };
+    });
 
     try {
-      const reply = await window.electronAPI.sendFollowUp(sid, chatHistoryRef.current, message);
+      const reply = await window.electronAPI.sendFollowUp(sid, currentReportId, chatHistoryRef.current, message);
 
       if (sessionIdRef.current === sid) {
         setState((prev) => ({

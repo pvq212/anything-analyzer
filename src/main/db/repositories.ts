@@ -297,3 +297,60 @@ export class FingerprintProfilesRepo {
     this.stmts.delete.run(sessionId)
   }
 }
+
+// ============================================================
+// Chat Messages Repository
+// ============================================================
+
+export class ChatMessagesRepo {
+  private stmts: {
+    insert: Database.Statement
+    findByReport: Database.Statement
+    deleteByReport: Database.Statement
+  }
+
+  constructor(private db: Database.Database) {
+    this.stmts = {
+      insert: db.prepare(
+        `INSERT INTO chat_messages (report_id, role, content, created_at)
+         VALUES (@report_id, @role, @content, @created_at)`
+      ),
+      findByReport: db.prepare(
+        'SELECT role, content FROM chat_messages WHERE report_id = ? ORDER BY id ASC'
+      ),
+      deleteByReport: db.prepare('DELETE FROM chat_messages WHERE report_id = ?')
+    }
+  }
+
+  append(reportId: string, role: string, content: string): void {
+    this.stmts.insert.run({
+      report_id: reportId,
+      role,
+      content,
+      created_at: Date.now(),
+    })
+  }
+
+  insertMany(reportId: string, messages: Array<{ role: string; content: string }>): void {
+    const now = Date.now()
+    const insertMany = this.db.transaction((msgs: Array<{ role: string; content: string }>) => {
+      for (const msg of msgs) {
+        this.stmts.insert.run({
+          report_id: reportId,
+          role: msg.role,
+          content: msg.content,
+          created_at: now,
+        })
+      }
+    })
+    insertMany(messages)
+  }
+
+  findByReport(reportId: string): Array<{ role: string; content: string }> {
+    return this.stmts.findByReport.all(reportId) as Array<{ role: string; content: string }>
+  }
+
+  deleteByReport(reportId: string): void {
+    this.stmts.deleteByReport.run(reportId)
+  }
+}
